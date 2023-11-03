@@ -1,0 +1,113 @@
+﻿@{
+    ViewData["Title"] = "Client Page";
+}
+
+<h4 class="mb-3 text-muted">Создание клиента</h4>
+<form class="mb-20" id="createClientForm">
+    <div class="mb-3">
+        <label class="form-label">Фамилия</label>
+        <input name="secondName" type="text" class="form-control" />
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Имя</label>
+        <input name="name" type="text" class="form-control" />
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Отчество</label>
+        <input name="fullName" type="text" class="form-control" />
+    </div>
+    <button id="createClient" class="btn btn-primary">Создать</button>
+</form>
+
+<br />
+<table class="table table-dark table-hover" id="clientTableID">
+    <thead>
+        <tr>
+            <th>Фамилия</th>
+            <th>Имя</th>
+            <th>Отчество</th>
+            <th>Выдача</th>
+        </tr>
+    </thead>
+    <tbody></tbody>
+</table>
+
+@section Scripts
+{
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script type="text/javascript" src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <script>
+        const swalWithBootstrapButtons = Swal.mixin({
+            customClass: {
+                confirmButton: 'btn btn-success'
+            },
+            buttonsStyling: false
+        })
+
+        let dataTable = $('#clientTableID').DataTable({
+            info: false,
+            serverSide: true,
+            searching: false,
+            paging: false,
+            sorting: false,
+            ajax: {
+                url: '@Url.Action("TaskHandler")',
+                method: 'POST',
+                data: null
+            },
+            columns: [
+                { data: 'secondName' },
+                { data: 'name' },
+                { data: 'fullName' },
+                {
+                    data: null,
+                    sortable: false,
+                    render: function (data, type) {
+                        return '<button class="btn btn-success mr-10 btn-sm center-block">Выдать книгу</button>'
+                    }
+                }
+            ],
+            createdRow: function (nRow, data) {
+                var recieveBook = function () {
+                    window.location.href = '/TransactBook?id=' + data.clientID;
+                }
+
+                var readBooksOfClient = function () {
+                    window.location.href = '/TransactBookReturn?id=' + data.clientID;
+                }
+
+                for (var i = 0; i < dataTable.columns().header().length - 1; i++) {
+                    $('td', nRow).eq(i).css('cursor', 'pointer');
+                    $('td', nRow).eq(i).on('click', readBooksOfClient);
+                }
+                $('td button', nRow).on('click', recieveBook);
+            }
+        });
+
+        $('#createClient').on('click', function (e) {
+            e.preventDefault();
+            $.ajax({
+                type: 'POST',
+                url: '@Url.Action("CreateClient", "Client")',
+                data: $('#createClientForm').serialize(),
+                success: function (response) {
+                    dataTable.draw();
+                    Swal.fire({
+                        title: 'Информация',
+                        text: response.description,
+                        icon: 'success',
+                        confirmButtonText: 'Окей'
+                    })
+                },
+                error: function (response) {
+                    Swal.fire({
+                        title: 'Информация',
+                        text: response.responseJSON.description,
+                        icon: 'error',
+                        confirmButtonText: 'Окей'
+                    })
+                }
+            })
+        });
+    </script>
+}
