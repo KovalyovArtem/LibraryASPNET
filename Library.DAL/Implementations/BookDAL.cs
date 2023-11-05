@@ -2,21 +2,26 @@
 using Library.DAL.Interfaces;
 using Library.DAL.Model;
 using Library.Domain.ViewModels.Book;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using Microsoft.Data.SqlClient;
 
 namespace Library.DAL.Implementations
 {
     public class BookDAL : IBookDAL
     {
+        SqlCommand cmd;
+        SqlDataReader reader;
+
         public async Task<IEnumerable<BookViewModel>> GetAllBooks()
         {
             using (var connection = DBConnection.CreateConnection())
             {
-                return await connection.QueryAsync<BookViewModel>("SELECT * FROM [Books]");
+                cmd = new SqlCommand("SELECT * FROM [Books]", connection);
+                await connection.OpenAsync();
+
+                using (reader = await cmd.ExecuteReaderAsync())
+                {
+                    return reader.Parse<BookViewModel>().ToList();
+                }
             }
         }
 
@@ -24,8 +29,14 @@ namespace Library.DAL.Implementations
         {
             using (var connection = DBConnection.CreateConnection())
             {
-                return await connection.QueryFirstOrDefaultAsync<Book>("SELECT * FROM [Books] WHERE BookID = @e",
-                    new { e = id });
+                cmd = new SqlCommand("SELECT * FROM [Books] WHERE BookID = @e", connection);
+                cmd.Parameters.AddWithValue("@e", id);
+                await connection.OpenAsync();
+
+                using (reader = await cmd.ExecuteReaderAsync())
+                {
+                    return reader.Parse<Book>().FirstOrDefault();
+                }
             }
         }
 
@@ -33,8 +44,14 @@ namespace Library.DAL.Implementations
         {
             using (var connection = DBConnection.CreateConnection())
             {
-                return await connection.QueryFirstOrDefaultAsync<Book>("SELECT * FROM [Books] WHERE Title = @e",
-                    new { e = Title });
+                cmd = new SqlCommand("SELECT * FROM [Books] WHERE Title = @e", connection);
+                cmd.Parameters.AddWithValue("@e", Title);
+                await connection.OpenAsync();
+
+                using (reader = await cmd.ExecuteReaderAsync())
+                {
+                    return reader.Parse<Book>().FirstOrDefault();
+                }
             }
         }
 
@@ -42,8 +59,14 @@ namespace Library.DAL.Implementations
         {
             using (var connection = DBConnection.CreateConnection())
             {
-                return await connection.QueryAsync<Book>("SELECT * FROM [Books] WHERE Title = @t",
-                    new { t = Title });
+                cmd = new SqlCommand("SELECT * FROM [Books] WHERE Title = @t", connection);
+                cmd.Parameters.AddWithValue("@t", Title);
+                await connection.OpenAsync();
+
+                using (reader = await cmd.ExecuteReaderAsync())
+                {
+                    return reader.Parse<Book>().ToList();
+                }
             }
         }
 
@@ -51,8 +74,11 @@ namespace Library.DAL.Implementations
         {
             using (var connection = DBConnection.CreateConnection())
             {
-                return Convert.ToInt32(await connection.QueryFirstOrDefaultAsync<Book>("SELECT BookID FROM [Books] WHERE Title = @t",
-                    new { t = Title }));
+                cmd = new SqlCommand("SELECT BookID FROM [Books] WHERE Title = @t", connection);
+                cmd.Parameters.AddWithValue("@t", Title);
+                await connection.OpenAsync();
+
+                return Convert.ToInt32(await cmd.ExecuteScalarAsync());
             }
         }
 
@@ -60,16 +86,29 @@ namespace Library.DAL.Implementations
         {
             using (var connection = DBConnection.CreateConnection())
             {
-                return await connection.QueryAsync<string>("SELECT Title FROM [Books]");
+                cmd = new SqlCommand("SELECT Title FROM [Books]", connection);
+                await connection.OpenAsync();
+
+                using (reader = await cmd.ExecuteReaderAsync())
+                {
+                    return reader.Parse<string>().ToList();
+                }
             }
         }
 
-        public async Task Create<Book>(Book book)
+        public async Task Create(Book book)
         {
             using (var connection = DBConnection.CreateConnection())
             {
                 var sql = "INSERT INTO Books VALUES (@Title, @Author, @Quantity, @Discription)";
-                await connection.ExecuteAsync(sql, book);
+                cmd = new SqlCommand(sql, connection);
+                cmd.Parameters.AddWithValue("@Title", book.Title);
+                cmd.Parameters.AddWithValue("@Author", book.Author);
+                cmd.Parameters.AddWithValue("@Quantity", book.Quantity);
+                cmd.Parameters.AddWithValue("@Discription", book.Discription);
+
+                await connection.OpenAsync();
+                await cmd.ExecuteNonQueryAsync();
             }
         }
 
@@ -77,8 +116,13 @@ namespace Library.DAL.Implementations
         {
             using (var connection = DBConnection.CreateConnection())
             {
-                var sql = "UPDATE Books SET Discription = @Discription WHERE Title = @t";
-                await connection.ExecuteAsync(sql, new { t = title, Discription = discription });
+                var sql = "UPDATE Books SET Discription = @Discription WHERE Title = @Title";
+                cmd = new SqlCommand(sql, connection);
+                cmd.Parameters.AddWithValue("@Title", title);
+                cmd.Parameters.AddWithValue("@Discription", discription);
+
+                await connection.OpenAsync();
+                await cmd.ExecuteNonQueryAsync();
             }
         }
 
@@ -87,7 +131,12 @@ namespace Library.DAL.Implementations
             using (var connection = DBConnection.CreateConnection())
             {
                 var sql = "UPDATE Books SET Discription = @Discription WHERE BookID = @e";
-                await connection.ExecuteAsync(sql, new { e = id, Discription = discription });
+                cmd = new SqlCommand(sql, connection);
+                cmd.Parameters.AddWithValue("@e", id);
+                cmd.Parameters.AddWithValue("@Discription", discription);
+
+                await connection.OpenAsync();
+                await cmd.ExecuteNonQueryAsync();
             }
         }
     }

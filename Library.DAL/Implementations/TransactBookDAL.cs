@@ -4,6 +4,7 @@ using Library.DAL.Model;
 using Library.Domain.ViewModels.Book;
 using Library.Domain.ViewModels.Client;
 using Library.Domain.ViewModels.TransactBook;
+using Microsoft.Data.SqlClient;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -17,14 +18,21 @@ namespace Library.DAL.Implementations
 {
     public class TransactBookDAL : ITransactBookDAL
     {
+        SqlCommand cmd;
+        SqlDataReader reader;
+
         public async Task<bool> ExistBook(int bookId, int clientId)
         {
             using (var connection = DBConnection.CreateConnection())
             {
-                return await connection.QuerySingleAsync<bool>("SELECT CASE WHEN " +
+                cmd = new SqlCommand("SELECT CASE WHEN " +
                     "EXISTS(SELECT 1 FROM BookTransaction WHERE BookID = @bid AND " +
-                    "ClientID = @cid AND ReturnDate IS NULL) THEN 1 ELSE 0 END",
-                    new { bid = bookId, cid = clientId });
+                    "ClientID = @cid AND ReturnDate IS NULL) THEN 1 ELSE 0 END", connection);
+                cmd.Parameters.AddWithValue("@bid", bookId);
+                cmd.Parameters.AddWithValue("@cid", clientId);
+                await connection.OpenAsync();
+
+                return Convert.ToBoolean(await cmd.ExecuteScalarAsync());
             }
         }
 
@@ -32,19 +40,31 @@ namespace Library.DAL.Implementations
         {
             using (var connection = DBConnection.CreateConnection())
             {
-                return await connection.QuerySingleAsync<bool>("SELECT CASE WHEN " +
+                cmd = new SqlCommand("SELECT CASE WHEN " +
                     "@c > Quantity THEN 1 ELSE 0 END FROM BookTransaction " +
-                    "WHERE BookTransactionID = @e",
-                    new { e = id, c = count });
+                    "WHERE BookTransactionID = @e", connection);
+                cmd.Parameters.AddWithValue("@e", id);
+                cmd.Parameters.AddWithValue("@c", count);
+                await connection.OpenAsync();
+
+                return Convert.ToBoolean(await cmd.ExecuteScalarAsync());
             }
         }
 
-        public async Task GiveBook<TransactBook>(TransactBook book)
+        public async Task GiveBook(TransactBook book)
         {
             using (var connection = DBConnection.CreateConnection())
             {
                 var sql = "INSERT INTO BookTransaction VALUES (@BookID, @ClientID, @RecieveDate, @ReturnDate, @Quantity)";
-                await connection.ExecuteAsync(sql, book);
+                cmd = new SqlCommand(sql, connection);
+                cmd.Parameters.AddWithValue("@BookID", book.BookID);
+                cmd.Parameters.AddWithValue("@ClientID", book.ClientID);
+                cmd.Parameters.AddWithValue("@RecieveDate", book.RecieveDate);
+                cmd.Parameters.AddWithValue("@ReturnDate", book.ReturnDate ?? (object)DBNull.Value);
+                cmd.Parameters.AddWithValue("@Quantity", book.Quantity);
+
+                await connection.OpenAsync();
+                await cmd.ExecuteNonQueryAsync();
             }
         }
 
@@ -52,10 +72,14 @@ namespace Library.DAL.Implementations
         {
             using (var connection = DBConnection.CreateConnection())
             {
-                return await connection.QuerySingleAsync<bool>("SELECT CASE WHEN " +
+                cmd = new SqlCommand("SELECT CASE WHEN " +
                     "Quantity - @q > 0 THEN 1 ELSE 0 END FROM Books WHERE " +
-                    "BookID = @e",
-                    new { q = count, e = id });
+                    "BookID = @e", connection);
+                cmd.Parameters.AddWithValue("@e", id);
+                cmd.Parameters.AddWithValue("@q", count);
+                
+                await connection.OpenAsync();
+                return Convert.ToBoolean(await cmd.ExecuteScalarAsync());
             }
         }
 
@@ -67,7 +91,12 @@ namespace Library.DAL.Implementations
                     "WHERE BookTransactionID = @e; UPDATE Books SET Quantity = " +
                     "Quantity + @q WHERE BookID = (SELECT BookID FROM BookTransaction " +
                     "WHERE BookTransactionID = @e)";
-                await connection.ExecuteAsync(sql, new { q = quantity, e = id });
+                cmd = new SqlCommand(sql, connection);
+                cmd.Parameters.AddWithValue("@q", quantity);
+                cmd.Parameters.AddWithValue("@e", id);
+
+                await connection.OpenAsync();
+                await cmd.ExecuteNonQueryAsync();
             }
         }
 
@@ -75,8 +104,17 @@ namespace Library.DAL.Implementations
         {
             using (var connection = DBConnection.CreateConnection())
             {
-                return await connection.QueryAsync<TransactBookViewModel>("SELECT BookTransactionID, Books.Title, Books.Author, BookTransaction.Quantity, RecieveDate FROM [BookTransaction] JOIN Books ON Books.BookID = BookTransaction.BookID WHERE ClientID = @e AND ReturnDate IS NULL",
-                    new { e = id});
+                cmd = new SqlCommand("SELECT BookTransactionID, Books.Title, " +
+                    "Books.Author, BookTransaction.Quantity, RecieveDate FROM " +
+                    "[BookTransaction] JOIN Books ON Books.BookID = BookTransaction.BookID " +
+                    "WHERE ClientID = @e AND ReturnDate IS NULL", connection);
+                cmd.Parameters.AddWithValue("@e", id);
+                await connection.OpenAsync();
+
+                using (reader = await cmd.ExecuteReaderAsync())
+                {
+                    return reader.Parse<TransactBookViewModel>().ToList();
+                }
             }
         }
     }
